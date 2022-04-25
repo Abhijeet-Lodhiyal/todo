@@ -4,6 +4,8 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const date = require(__dirname + "/date.js");
 const mongoose=require("mongoose");
+const _ = require("lodash");
+const { listen } = require("express/lib/application");
 const app = express();
 
 app.set('view engine', 'ejs');
@@ -11,7 +13,7 @@ app.set('view engine', 'ejs');
 app.use(bodyParser.urlencoded({extended: true}));
 app.use(express.static("public"));
 
-mongoose.connect("mongodb://localhost:27017/todolistDB");
+mongoose.connect("mongodb+srv://abhijeetlodhiyalALO:komedymatKRO5@cluster0.35oj1.mongodb.net/todolistDB");
 
 const itemSchema=new mongoose.Schema({
   name:String
@@ -32,12 +34,7 @@ const walk=new Item({
 });
 
 
-const defaultItem=[buy,drink,walk];
-
-
-
-
-
+const defaultItem=[buy,drink,walk]; 
 app.get("/", function(req, res) {
 const day = date.getDate();
 
@@ -61,44 +58,92 @@ app.post("/", function(req, res){
 
   const itemName = req.body.newItem;
 
+  const pageName=req.body.list;
   const newItem=new Item({
     name:itemName,
   });
+
+if(pageName === date.getDate())
+{
   newItem.save();
   res.redirect("/");
-
-});
-
-app.get("/:customName",function(req,res){
-const pageName=req.params.customName;
-const customSchema=new mongoose.Schema({
-  name:pageName,
-  list:[defaultItem]
-});
-const newItem=mongoose.model(pageName,customSchema);
-
-res.render("list",{listTitle:pageName,newListItems:defaultItem});
-});
-
-
-
-app.post("/delete",function(req,res){
-const id=req.body.checkbox;
-Item.findByIdAndRemove(id,function(err)
-{
+}
+else{
+List.findOne({name:pageName},function(err,foundList){
   if(!err)
   {
-    res.redirect("/");
+
+foundList.items.push(newItem);
+foundList.save();
+res.redirect("/"+pageName);
+}
+});  
+
+}
+
+
+});
+
+const customSchema=new mongoose.Schema({
+  name:String,
+  items:[itemSchema]
+});
+const List=mongoose.model("List",customSchema);
+
+
+
+
+app.get("/:customName",function(req,res){
+const pageName=_.capitalize(req.params.customName);
+
+List.findOne({name:pageName},function(err,foundList){
+  if(!err)
+  {
+    if(!foundList)
+    {
+      const newItemObj=new List({
+        name:pageName,
+        items:defaultItem
+      });
+      newItemObj.save();
+      res.redirect("/"+pageName);
+    }
+    else
+    {
+      res.render("list",{listTitle:foundList.name,newListItems:foundList.items});
+    }
   }
 });
-
 });
 
 
-app.get("/work", function(req,res){
-  res.render("list", {listTitle: "Work List", newListItems: workItems});
-});
 
+app.post("/delete",function(req,res)
+{
+const id=req.body.checkbox;
+const pageName=req.body.listName;
+if(pageName === date.getDate())
+{
+  Item.findByIdAndRemove(id,function(err)
+  {
+    if(!err)
+    {
+      res.redirect("/");
+    }
+  });
+}
+else
+{
+  List.findOneAndUpdate({name:pageName},{$pull : {items : {_id : id }}},function (err) {
+    if(!err)
+    {
+      res.redirect("/"+pageName);
+    }
+  });
+}
+
+
+});
 app.get("/about", function(req, res){
   res.render("about");
 });
